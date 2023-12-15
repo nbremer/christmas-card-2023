@@ -35,11 +35,11 @@ const FONT_FAMILY_TITLE = "Almendra Display"
 document.fonts.load(`normal 400 10px "${FONT_FAMILY_NUMBERS}"`)
 document.fonts.load(`normal 400 10px "${FONT_FAMILY_TITLE}"`)
 
-document.fonts.load(`normal 100 10px "${FONT_FAMILY}"`)
-document.fonts.load(`normal 300 10px "${FONT_FAMILY}"`)
+// document.fonts.load(`normal 100 10px "${FONT_FAMILY}"`)
+// document.fonts.load(`normal 300 10px "${FONT_FAMILY}"`)
 document.fonts.load(`normal 400 10px "${FONT_FAMILY}"`)
-// document.fonts.load(`italic 400 10px "${FONT_FAMILY}"`)
-document.fonts.load(`normal 500 10px "${FONT_FAMILY}"`)
+document.fonts.load(`italic 400 10px "${FONT_FAMILY}"`)
+// document.fonts.load(`normal 500 10px "${FONT_FAMILY}"`)
 document.fonts.load(`normal 700 10px "${FONT_FAMILY}"`)
 
 /////////////////////////////////////////////////////////////////////
@@ -58,8 +58,8 @@ const context_texture = canvas_texture.getContext("2d")
 canvas_texture.style.display = "none"
 
 const PIXEL_RATIO = window.devicePixelRatio
-const WIDTH = DEFAULT_WIDTH
-const HEIGHT = DEFAULT_HEIGHT
+const WIDTH = DEFAULT_WIDTH * 3/2
+const HEIGHT = DEFAULT_HEIGHT * 3/2
 const MARGIN = { top: HEIGHT * 0.08, right: WIDTH * 0.09, bottom: HEIGHT * 0.055, left: WIDTH * 0.08 }
 const w = WIDTH / 2 - MARGIN.left - MARGIN.right
 const h = HEIGHT - MARGIN.top - MARGIN.bottom
@@ -73,18 +73,18 @@ setSize(canvas2D)
 setSize(canvas_texture)
 
 function setSize(canvas) {
-    const screen_width = Math.min(window.innerWidth - 2 * 40, DEFAULT_WIDTH / 2)
-    canvas.width = DEFAULT_WIDTH
-    canvas.height = DEFAULT_HEIGHT
+    const screen_width = window.innerWidth - 2 * 40
+    // const screen_width = Math.min(window.innerWidth - 2 * 40, DEFAULT_WIDTH / 2)
+    canvas.width = WIDTH
+    canvas.height = HEIGHT
     canvas.style.width = `${screen_width}px`
     canvas.style.height = `${screen_width / ASP}px`
-    // canvas.style.width = `${DEFAULT_WIDTH / PIXEL_RATIO}px`
-    // canvas.style.height = `${DEFAULT_HEIGHT / PIXEL_RATIO}px`
+
 }// function setSize
 
 // Add resize function
 window.addEventListener("resize", () => {
-    const screen_width = Math.round(Math.min(window.innerWidth - 2 * 40, DEFAULT_WIDTH / 2))
+    const screen_width = Math.round(Math.min(window.innerWidth - 2 * 40, WIDTH / 2))
     canvas2D.style.width = `${screen_width}px`
     canvas2D.style.height = `${screen_width / ASP}px`
 })
@@ -95,9 +95,9 @@ window.addEventListener("resize", () => {
 
 const COLOR_BACKGROUND = "#fbfdfd"
 const COLOR_TEXT_TITLE = "#0c8de4"
-const COLOR_TEXT = "#065493"
+const COLOR_TEXT = "#0077C5" // "#065493"
 // const COLOR_TEXT = "#25211d"
-const COLOR_SUB_TEXT = "#60acd2"
+const COLOR_SUB_TEXT = "#49b0e4"
 const COLOR_LINES = "#cdddef"
 
 // ["#FFBA4E", "#f50092", "#008DEE", "rgb(0, 210, 171)", "#FF6765", "#4F35D1"]
@@ -146,7 +146,7 @@ let points_texture = []
 for (let i = 0; i < 20000; i++) {
     let x = rangeFloor(WIDTH)
     let y = rangeFloor(HEIGHT)
-    let r = rangeFloor(2, 50)
+    let r = rangeFloor(2, 50) * SF
     let color = `hsla(${rangeFloor(180,230)}, 100%, ${rangeFloor(60, 80)}%, ${range(0.1, 0.9)})`
     points_texture.push({x, y, r, color})
 }// for i
@@ -186,6 +186,7 @@ document.fonts.ready.then(() => {
         drawBackground(context)
         drawIntroText(context)
         drawChartGrid(context)
+        drawCredits(context)
 
         ///////////////// Prepare the "texture" for the snowflakes //////////////////
         points_texture.forEach(d => {
@@ -367,22 +368,68 @@ function drawIntroText(context) {
     // Title
     context.save()
     context.translate(MARGIN.left - 130 * SF, MARGIN.top + 120 * SF)
-    context.font = `${170*SF}px ${FONT_FAMILY_TITLE}`
-    context.fillStyle = COLOR_TEXT_TITLE
-    context.fillText(`White Christmas`, 0, 0)
-    context.font = `${50*SF}px ${FONT_FAMILY_TITLE}`
-    context.fillText(`I'm dreaming of a`, 0, - 170 * SF)
 
+        let GRAD = context.createLinearGradient(0, 0, w, 80 * SF)
+        GRAD.addColorStop(0.2, "#279efc")
+        GRAD.addColorStop(1, "#67e1f4")
+        context.fillStyle = GRAD // COLOR_TEXT_TITLE
+        context.font = `${170*SF}px ${FONT_FAMILY_TITLE}`
+        context.fillText(`White Christmas`, 0, 0)
+        context.font = `${50*SF}px ${FONT_FAMILY_TITLE}`
+        context.fillText(`I'm dreaming of a`, 0, - 170 * SF)
 
-    context.translate(MARGIN.left - 130 * SF, MARGIN.top + 170 * SF)
-    context.font = `${90*SF}px ${FONT_FAMILY_TITLE}`
-    context.fillText(`Merry Christmas!`, 480 * SF, 150 * SF)
+        context.translate(MARGIN.left - 130 * SF, MARGIN.top + 170 * SF)
+        context.font = `${90*SF}px ${FONT_FAMILY_TITLE}`
+        context.fillText(`Merry Christmas!`, 480 * SF, 150 * SF)
+
+    context.restore()
+
+    // Draw the intro text
+    context.save()
+    context.translate(MARGIN.left, MARGIN.top + 220 * SF)
+
+    context.fillStyle = COLOR_TEXT
+        const fs = 28 * SF
+        const lh = 44 * SF
+        let text = ["Every year actually, but I don't have any memory of it ever truly snowing on Christmas Day in", "the Netherlands. And so, I turned to some historic weather data."]
+        context.font = `${fs}px ${FONT_FAMILY}`
+        context.textAlign = "left"
+        context.textBaseline = "middle"
+        context.fillText(text[0], 0, 0)
+        context.fillText(text[1], 0, lh)
+
+        text = ["I looked at some of the well-known cities in North America (left page) and the large capital", "cities in Europe and Asia (right page) that might see cold enough temperatures. How often did", "they have a white Christmas? It seems my chances in the Netherlands remain slim, but I hope", "you'll be lucky enough to get some snow on that special day of the year! "]
+        for(let i = 0; i < text.length; i++) {
+            context.fillText(text[i], 0, lh * (i + 3.5))
+        }// for i
+
+        // Central bold text
+        context.translate(w/2, 0)
+        context.font = `normal 700 ${fs}px ${FONT_FAMILY}`
+        context.textAlign = "center"
+        text = ["Where has it snowed on December 25th in the past 50 years? "]
+        context.fillText(text[0], 0, lh * 2.25)
 
     context.restore()
 
     // Merry Christmas!
 }// function drawIntroText
 
+function drawCredits(context) {
+
+    let text = "Data from Visual Crossing      |      Created by Nadieh Bremer      |      VisualCinnamon.com"
+    context.save()
+    context.translate(WIDTH, HEIGHT/2)
+    context.rotate(-PI/2)
+    context.fillStyle = COLOR_SUB_TEXT
+    context.font = ` italic ${18*SF}px ${FONT_FAMILY}`
+    context.textAlign = "center"
+    context.textBaseline = "middle"
+    context.globalAlpha = 0.7
+    context.fillText(text, 0, -22*SF)
+    context.restore()
+
+}// function drawCredits
 /////////////////////////////////////////////////////////////////////
 //////////////// Draw the Static Background Elements ////////////////
 /////////////////////////////////////////////////////////////////////

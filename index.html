@@ -9,11 +9,11 @@
         <style>
             body {
                 margin: 40px;
-                font-family: 'Noway', monospace;
+                font-family: "Atkinson Hyperlegible", sans-serif;
             }
 
             #credits {
-                font-family: "Atkinson Hyperlegible", sans-serif;
+                /* font-family: "Almendra Display", sans-serif; */
                 font-size: 13px;
                 font-style: italic;
                 color: #0c8de4;
@@ -24,7 +24,6 @@
 
                 a {
                     color: #0c8de4;
-                    /* no underline */
                     text-decoration: none;
                     border-bottom: #0c8de4 3px solid;
                     border-image: linear-gradient(to right, #67e1f4, #11afe8) 1
@@ -39,7 +38,6 @@
                 margin: 0px auto;
                 display: block;
                 position: relative;
-                display: none;
             }
 
             #canvas-2D {
@@ -56,30 +54,26 @@
         <!-- Google Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Almendra+Display&family=Atkinson+Hyperlegible:ital@0;1&display=swap" rel="stylesheet"> 
+        <link href="https://fonts.googleapis.com/css2?family=Almendra+Display&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet"> 
 		
         <!-- JavaScript files -->
-        <!-- <script src="js/lib/d3.v7.js"></script> -->
-        <!-- <script src="js/lib/seedRandom.min.js"></script> -->
+        <script src="js/lib/d3.v7.js"></script>
+        <script src="js/lib/seedRandom.min.js"></script>
 
 	</head>
 	<body>
-        <!-- Christmas Card -->
-        <div id="img-container">
-            <img src="img/christmas_card_2023_visual_cinnamon.png" style="width: 100%; height: auto;">
-        </div>
 
-        <!-- Credits -->
-        <div id="credits">
-            <p>Created by Nadieh Bremer | <a href="https://www.visualcinnamon.com" target="_blank">Visual Cinnamon</a></p>
-            <p>Historic Weather Data | <a href="https://www.visualcrossing.com" target="_blank">Visual Crossing</a></p>
-        </div>
-
-        <!-- The Hidden Visual itself -->
+        <!-- The Visual -->
         <div id="chart">
             <canvas id="canvas-2D"></canvas>
+
+            <!-- Credits -->
+            <div id="credits">
+                <p>Created by Nadieh Bremer | <a href="https://www.visualcinnamon.com" target="_blank">Visual Cinnamon</a></p>
+                <p>Historic Weather Data | <a href="https://www.visualcrossing.com" target="_blank">Visual Crossing</a></p>
+            </div>
         </div>
 
-        <!-- <script src="js/script-canvas2D.js"></script> -->
+        <script src="js/script-canvas2D.js"></script>
 	</body>
 </html>
