@@ -18,6 +18,7 @@ let DEFAULT_HEIGHT = 2480 //210mm
 
 let cos = Math.cos
 let sin = Math.sin
+let sqrt = Math.sqrt
 
 // Data
 let data, dataEU, dataNA
@@ -25,6 +26,10 @@ let numID, numEU, numNA
 let citiesNA, citiesEU
 let unique_cities
 let OFFSET_NA
+
+let delaunay
+let HOVER_ACTIVE = false
+let HOVERED_NODE
 
 ///////////////////////// Read in the fonts /////////////////////////
 
@@ -45,19 +50,21 @@ document.fonts.load(`normal 700 10px "${FONT_FAMILY}"`)
 /////////////////////////////////////////////////////////////////////
 /////////////////////////// Create Canvas ///////////////////////////
 /////////////////////////////////////////////////////////////////////
+const canvas = document.getElementById("canvas-snowflakes")
+const context = canvas.getContext("2d")
 
-// const canvas_background = document.getElementById("canvas-background")
-// const context_background = canvas_background.getContext("2d")
+const canvas_background = document.getElementById("canvas-background")
+const context_background = canvas_background.getContext("2d")
 
-const canvas2D = document.getElementById("canvas-2D")
-const context = canvas2D.getContext("2d")
+const canvas_hover = document.getElementById("canvas-hover")
+const context_hover = canvas_hover.getContext("2d")
 
 const canvas_texture = document.createElement("canvas")
 const context_texture = canvas_texture.getContext("2d")
 //Set the style of display to none
 canvas_texture.style.display = "none"
 
-const PIXEL_RATIO = window.devicePixelRatio
+const PIXEL_RATIO = 1//window.devicePixelRatio
 const WIDTH = DEFAULT_WIDTH * 3/2
 const HEIGHT = DEFAULT_HEIGHT * 3/2
 const MARGIN = { top: HEIGHT * 0.08, right: WIDTH * 0.09, bottom: HEIGHT * 0.055, left: WIDTH * 0.08 }
@@ -67,26 +74,32 @@ const ASP = DEFAULT_WIDTH / DEFAULT_HEIGHT
 
 // Set the scale factor - I don't think I'm actually using this 
 const SF = WIDTH / DEFAULT_WIDTH
+let PAGE_SF
 
 // setSize(canvas_background)
-setSize(canvas2D)
+setSize(canvas)
+setSize(canvas_background)
+setSize(canvas_hover)
 setSize(canvas_texture)
 
 function setSize(canvas) {
     const screen_width = window.innerWidth - 2 * 40
     // const screen_width = Math.min(window.innerWidth - 2 * 40, DEFAULT_WIDTH / 2)
+    PAGE_SF = screen_width / WIDTH
     canvas.width = WIDTH
     canvas.height = HEIGHT
     canvas.style.width = `${screen_width}px`
     canvas.style.height = `${screen_width / ASP}px`
-
 }// function setSize
 
 // Add resize function
 window.addEventListener("resize", () => {
     const screen_width = Math.round(Math.min(window.innerWidth - 2 * 40, WIDTH / 2))
-    canvas2D.style.width = `${screen_width}px`
-    canvas2D.style.height = `${screen_width / ASP}px`
+    PAGE_SF = screen_width / WIDTH
+    canvas.style.width = `${screen_width}px`
+    canvas.style.height = `${screen_width / ASP}px`
+    canvas_hover.style.width = `${screen_width}px`
+    canvas_hover.style.height = `${screen_width / ASP}px`
 })
 
 /////////////////////////////////////////////////////////////////////
@@ -95,9 +108,9 @@ window.addEventListener("resize", () => {
 
 const COLOR_BACKGROUND = "#fbfdfd"
 const COLOR_TEXT_TITLE = "#0c8de4"
-const COLOR_TEXT = "#0077C5" // "#065493"
+const COLOR_TEXT = "#007dd1" //"#0077C5" // "#065493"
 // const COLOR_TEXT = "#25211d"
-const COLOR_SUB_TEXT = "#49b0e4"
+const COLOR_SUB_TEXT = "#56b9eb" // "#49b0e4"
 const COLOR_LINES = "#cdddef"
 
 // ["#FFBA4E", "#f50092", "#008DEE", "rgb(0, 210, 171)", "#FF6765", "#4F35D1"]
@@ -127,6 +140,12 @@ const scale_precip = d3.scaleSqrt()
     .domain([0, 40])
     .range([2, 60])
 
+// The "thickness" of the stroke of the snowflakes
+const scale_thick = d3.scaleLinear()
+    .domain([10, 55])
+    .range([2, 5])
+    .clamp(true)
+
 // Latitude line on the right
 const line_top = 0
 const line_bottom = h
@@ -147,7 +166,7 @@ for (let i = 0; i < 20000; i++) {
     let x = rangeFloor(WIDTH)
     let y = rangeFloor(HEIGHT)
     let r = rangeFloor(2, 50) * SF
-    let color = `hsla(${rangeFloor(180,230)}, 100%, ${rangeFloor(60, 80)}%, ${range(0.1, 0.9)})`
+    let color = `hsla(${rangeFloor(185,225)}, 100%, ${rangeFloor(60, 80)}%, ${range(0.1, 0.9)})`
     points_texture.push({x, y, r, color})
 }// for i
 
@@ -182,13 +201,14 @@ document.fonts.ready.then(() => {
         determineGridPosition(dataNA, citiesNA, numNA, OFFSET_NA)
         determineGridPosition(dataEU, citiesEU, numEU)
         
-        ///////////////// Draw the Static Background /////////////////
-        drawBackground(context)
-        drawIntroText(context)
+        ///////////////// Draw the Static Background ////////////////
+        drawBackground(context_background)
+        drawIntroText(context_background)
+        drawChartGridBackground(context_background)
+        drawCredits(context_background)
         drawChartGrid(context)
-        drawCredits(context)
-
-        ///////////////// Prepare the "texture" for the snowflakes //////////////////
+        
+        ////////// Prepare the "texture" for the snowflakes /////////
         points_texture.forEach(d => {
             d.x_base = d.x
             d.y_base = d.y
@@ -196,10 +216,23 @@ document.fonts.ready.then(() => {
         })// forEach
         drawTexturePoints()
 
-        //////////////////// Draw the Snowflakes /////////////////////
+        //////////////////// Draw the Snowflakes ////////////////////
         drawSnowflakeGrid(context)
         // Legend marks 
-        drawLegend(context)
+        drawLegend(context_background)
+
+        ////////////////////// Setup the Hovers /////////////////////
+        dataNA.forEach(d => {
+            d.x_canvas = MARGIN.left + d.x
+            d.y_canvas = MARGIN.top + d.y
+        })// forEach
+        dataEU.forEach(d => {
+            d.x_canvas = MARGIN.left + WIDTH / 2 + d.x
+            d.y_canvas = MARGIN.top + d.y
+        })// forEach
+
+        delaunay = d3.Delaunay.from(data.map(d => [d.x_canvas, d.y_canvas]))
+        setupHover()
 
         // ///////////////// Animate the Snowflakes /////////////////////
         // let counter = 0
@@ -270,8 +303,12 @@ function prepareData(dataRAW) {
 
         d.date = parseDate(d.datetime)
         d.year = d.date.getFullYear()
+
+        // Visual properties
+        d.r = scale_precip(d.precip) * SF
+        d.o = scale_thick(d.r) * SF
     })
-    console.log(data[0])
+    // console.log(data[0])
 
     // Filter out some cities
     data = data.filter(d => ["Thimphu","Kathmandu"].indexOf(d.city) === -1)
@@ -370,16 +407,16 @@ function drawIntroText(context) {
     context.translate(MARGIN.left - 130 * SF, MARGIN.top + 120 * SF)
 
         let GRAD = context.createLinearGradient(0, 0, w, 80 * SF)
-        GRAD.addColorStop(0.2, "#279efc")
-        GRAD.addColorStop(1, "#67e1f4")
+        GRAD.addColorStop(0.2, "#2783fc")
+        GRAD.addColorStop(1, "#66caf4")
         context.fillStyle = GRAD // COLOR_TEXT_TITLE
         context.font = `${170*SF}px ${FONT_FAMILY_TITLE}`
         context.fillText(`White Christmas`, 0, 0)
         context.font = `${50*SF}px ${FONT_FAMILY_TITLE}`
         context.fillText(`I'm dreaming of a`, 0, - 170 * SF)
 
-        context.translate(MARGIN.left - 130 * SF, MARGIN.top + 170 * SF)
-        context.font = `${90*SF}px ${FONT_FAMILY_TITLE}`
+        context.translate(MARGIN.left - 150 * SF, MARGIN.top + 170 * SF)
+        context.font = `${96*SF}px ${FONT_FAMILY_TITLE}`
         context.fillText(`Merry Christmas!`, 480 * SF, 150 * SF)
 
     context.restore()
@@ -391,14 +428,14 @@ function drawIntroText(context) {
     context.fillStyle = COLOR_TEXT
         const fs = 28 * SF
         const lh = 44 * SF
-        let text = ["Every year actually, but I don't have any memory of it ever truly snowing on Christmas Day in", "the Netherlands. And so, I turned to some historic weather data."]
+        let text = ["Every year actually, but I don't have any memory of it ever truly snowing on Christmas Day in", "the Netherlands. And so, I turned to some historic weather data to find out..."]
         context.font = `${fs}px ${FONT_FAMILY}`
         context.textAlign = "left"
         context.textBaseline = "middle"
         context.fillText(text[0], 0, 0)
         context.fillText(text[1], 0, lh)
 
-        text = ["I looked at some of the well-known cities in North America (left page) and the large capital", "cities in Europe and Asia (right page) that might see cold enough temperatures. How often did", "they have a white Christmas? It seems my chances in the Netherlands remain slim, but I hope", "you'll be lucky enough to get some snow on that special day of the year! "]
+        text = ["I looked at some of the well-known cities in North America and the large capital cities in", "Europe and Asia that might see cold enough temperatures. How often did they have a white", "Christmas? It seems my chances in the Netherlands remain slim, but I hope you'll be lucky", "enough to get some snow on that special day of the year!"]
         for(let i = 0; i < text.length; i++) {
             context.fillText(text[i], 0, lh * (i + 3.5))
         }// for i
@@ -448,21 +485,43 @@ function drawChartGrid(context) {
     context.restore()
 }// function drawChartGrid
 
+function drawChartGridBackground(context) {
+    context.save()
+    context.translate(MARGIN.left, MARGIN.top) // + 
+        drawGridElementsBackground(context)
+    context.restore()
+
+    // Draw the right page - EurAsia
+    context.save()
+    context.translate(WIDTH / 2 + MARGIN.left, MARGIN.top)
+        drawGridElementsBackground(context)
+    context.restore()
+}// function drawChartGrid
+
 // Draw each page's grid of labels and the latitude line
 function drawGridElements(context, data, cities) {
     ////////////////////// Draw the city labels /////////////////////
     drawCityLabels(context, cities)
-
-    ////////////////////// Draw the year labels /////////////////////
-    drawYearLabels(context, cities)
+    drawCityGridLines(context, cities)
 
     //////////// Draw the temperature bar per data point ////////////
     // drawTemperatureDashOnTop(context, data)
     // drawTemperatureDash(context, data)
     // drawTemperatureBars(context, data)
 
+    //////////////////// Draw the year grid lines ///////////////////
+    drawYearGridLines(context, cities)
+
     //////////////////// Draw the latitude lines ////////////////////
-    drawLatitudeLine(context, cities)
+    drawLatitudeArcs(context, cities)
+}// function drawGridElements
+
+function drawGridElementsBackground(context) {
+    ////////////////////// Draw the year labels /////////////////////
+    drawYearLabels(context)
+
+    ////////////////// Draw the latitude line axis //////////////////
+    drawLatitudeLine(context)
 }// function drawGridElements
 
 // Draw the title above each page
@@ -482,6 +541,7 @@ function drawGridTitle(context, cities, text) {
     context.restore()
 }// function drawGridTitle
 
+// Draw the city and country name at the left
 function drawCityLabels(context, cities) {
     // Draw the city and country name
     context.textAlign = "right"
@@ -498,7 +558,10 @@ function drawCityLabels(context, cities) {
     cities.forEach(d => {
         context.fillText(`${d.country}`, d.label_x, d.label_y + 20 * SF)
     })//forEach
+}// function drawCityLabels
 
+// Draw a thin horizontal line at each city
+function drawCityGridLines(context, cities) {
     // Draw a thin line along each row
     context.strokeStyle = "#c9d0d4"//COLOR_LINES
     context.lineWidth = 1 * SF
@@ -508,9 +571,9 @@ function drawCityLabels(context, cities) {
         context.lineTo(w, Math.round(d.label_y+0.5))
         context.stroke()
     })//forEach
-}// function drawCityLabels
+}// function drawCityGridLines
 
-function drawYearLabels(context, cities) {
+function drawYearLabels(context) {
     let years = [1975,1980,1985,1990,1995,2000,2005,2010,2015,2020]
 
     // context.globalAlpha = 0.7
@@ -518,28 +581,36 @@ function drawYearLabels(context, cities) {
     context.fillStyle = COLOR_TEXT
     context.textAlign = "center"
     context.strokeStyle = "#c9d0d4"//COLOR_LINES
+    years.forEach(year => {
+        context.save()
+        context.translate(Math.round(scale_time(year)), h)
+            // Draw the year
+            context.fillText(`${year}`, 0, 50 * SF)
+        context.restore()
+    })// forEach
+    context.globalAlpha = 1
+}// function drawYearLabels
+
+function drawYearGridLines(context, cities) {
+    let years = [1980,1990,2000,2010,2020]
+
+    // context.globalAlpha = 0.7
+    context.strokeStyle = "#c9d0d4"//COLOR_LINES
     context.lineWidth = 1.5 * SF
     context.setLineDash([4 * SF, 8 * SF])
     years.forEach(year => {
         context.save()
         context.translate(Math.round(scale_time(year)), h)
-        
-        // Draw the year
-        context.fillText(`${year}`, 0, 50 * SF)
-
-        // Draw a thin dotted line along the column
-        if(year % 10 === 0) {
+            // Draw a thin dotted line along the column
             context.beginPath()
             context.moveTo(0.5, 25 * SF)
             context.lineTo(0.5, cities[0].label_y-h - 25 * SF)
             context.stroke()
-        }// if
-
         context.restore()
     })// forEach
     context.globalAlpha = 1
     context.setLineDash([])
-}// function drawYearLabels
+}// function drawYearGridLines
 
 /////////////////////////////////////////////////////////////////////
 ////////////////////////// Draw the Legend //////////////////////////
@@ -627,40 +698,21 @@ function drawSnowFlakes(context, data) {
     data.forEach(d => {
         // I don't trust the data with precipitation above 40mm
         if(d.precip > scale_precip.domain()[1]) return
-
-        const r = scale_precip(d.precip) * SF
-
-        const scale_thick = d3.scaleLinear()
-            .domain([10, 55])
-            .range([2, 5])
-            .clamp(true)
-
-        const o = scale_thick(r) * SF
-
-        if(d.preciptype === "snow" && d.tempmin < 1.5) {
-            drawSixSidedFlake(context, d.x, d.y, r * 0.525, r, false)
-            drawSixSidedFlake(context, d.x, d.y, r * 0.525, r, true, o)
-
-        } else if (d.preciptype === "rain,snow" && d.tempmin < 1.5) {
-            // context.globalAlpha = 0.1
-            // drawFourSidedFlake(context, d.x, d.y, r * 0.7, r, false)
-            // context.globalAlpha = 1
-
-            // context.strokeStyle = "#5ccafa"
-            // drawFourSidedFlakeSimple(context, d.x, d.y, r * 0.7, r, true)
-            
-            drawFourSidedFlake(context, d.x, d.y, r * 0.7, r, true, Math.max(2 * SF, o*0.7))
-
-        // } else if (d.conditions == "") { // No Data
-        //     context.fillStyle = "red"
-        //     context.beginPath()
-        //     context.arc(d.x, d.y, 3 * SF, 0, TAU)
-        //     context.fill()
-        }// else if
-
+        // Draw each snowflake
+        drawSingleFlake(context, d, d.x, d.y)
     })// forEach
     context.globalCompositeOperation = "source-over"
 }// function drawSnowFlakes
+
+function drawSingleFlake(context, d, x, y, offset = false) {
+    if(d.preciptype === "snow" && d.tempmin < 1.5) {
+        drawSixSidedFlake(context, x, y, d.r * 0.525, d.r, false, d.o, offset)
+        drawSixSidedFlake(context, x, y, d.r * 0.525, d.r, true, d.o, offset)
+    } else if (d.preciptype === "rain,snow" && d.tempmin < 1.5) {
+        drawFourSidedFlake(context, x, y, d.r * 0.7, d.r, true, Math.max(2 * SF, d.o * 0.7), offset)
+    }// else if
+}// function drawSingleFlake
+
 
 /////////////////////////////////////////////////////////////////////
 ///////////////////////////// Snowflakes ////////////////////////////
@@ -684,7 +736,7 @@ function drawFourSidedFlakeSimple(context, x, y, w, h, do_stroke = false) {
     context.restore()
 }// function drawFourSidedFlakeSimple
 
-function drawFourSidedFlake(context, x, y, w, h, do_stroke = false, o = 2 * SF) {
+function drawFourSidedFlake(context, x, y, w, h, do_stroke = false, o = 2 * SF, offset = false) {
     context.save()
     context.translate(x, y)
 
@@ -709,12 +761,13 @@ function drawFourSidedFlake(context, x, y, w, h, do_stroke = false, o = 2 * SF) 
 
     context.clip()
     context.translate(-x, -y)
-    context.drawImage(canvas_texture, -MARGIN.left, -MARGIN.top, WIDTH, HEIGHT)
+    if(offset) context.drawImage(canvas_texture, 0, 0, WIDTH, HEIGHT)
+    else context.drawImage(canvas_texture, -MARGIN.left, -MARGIN.top, WIDTH, HEIGHT)
 
     context.restore()
 }// function drawFourSidedFlake
 
-function drawSixSidedFlake(context, x, y, w, h, do_stroke = false, o = 2 * SF) {
+function drawSixSidedFlake(context, x, y, w, h, do_stroke = false, o = 2 * SF, offset = false) {
     context.save()
     context.translate(x, y)
 
@@ -741,7 +794,8 @@ function drawSixSidedFlake(context, x, y, w, h, do_stroke = false, o = 2 * SF) {
     context.save()
     context.clip()
     context.translate(-x, -y)
-    context.drawImage(canvas_texture, -MARGIN.left, -MARGIN.top, WIDTH, HEIGHT)
+    if(offset) context.drawImage(canvas_texture, 0, 0, WIDTH, HEIGHT)
+    else context.drawImage(canvas_texture, -MARGIN.left, -MARGIN.top, WIDTH, HEIGHT)
     context.restore()
 
     // Extra dash or dot
@@ -761,7 +815,8 @@ function drawSixSidedFlake(context, x, y, w, h, do_stroke = false, o = 2 * SF) {
     context.save()
     context.clip()
     context.translate(-x, -y)
-    context.drawImage(canvas_texture, -MARGIN.left, -MARGIN.top, WIDTH, HEIGHT)
+    if(offset) context.drawImage(canvas_texture, 0, 0, WIDTH, HEIGHT)
+    else context.drawImage(canvas_texture, -MARGIN.left, -MARGIN.top, WIDTH, HEIGHT)
     context.restore()
 
     context.restore()
@@ -986,7 +1041,7 @@ function drawTemperatureDashOnTop(context, data) {
 /////////////////////////////////////////////////////////////////////
 /////////////////////////// Latitude Line ///////////////////////////
 /////////////////////////////////////////////////////////////////////
-function drawLatitudeLine(context, cities) {
+function drawLatitudeLine(context) {
     // Draw the line
     context.beginPath()
     context.moveTo(line_x, line_top)
@@ -1031,20 +1086,12 @@ function drawLatitudeLine(context, cities) {
 
         context.restore()
     })//forEach
+}// function drawLatitudeLine
 
-    // context.textAlign = "center"
-    // latitude_labels.forEach(lat => {
-    //     context.save()
-    //     context.translate(line_x, scale_latitude(lat))
-    //     context.rotate(degToRad(-90))
-    //     context.translate(0, 20 * SF)
-    //     context.fillText(`${lat}°`, 0, 0)
-    //     context.restore()
-    // })//forEach
-
+function drawLatitudeArcs(context, cities) {
     // Draw a cubic bezier curve from the end of each row to the actual latitude of the city
-    context.strokeStyle = COLOR_LINES
     context.lineWidth = 2 * SF
+    context.strokeStyle = COLOR_LINES
     cities.forEach(d => {
         // Start
         let xS = w + 20 * SF
@@ -1052,20 +1099,160 @@ function drawLatitudeLine(context, cities) {
         // End
         let xE = line_x - 20 * SF
         let yE = scale_latitude(d.latitude)
-        // Control points
-        let dist = (xE - xS) / 2
-        let x1 = xS + dist*0.9
-        let y1 = yS
-        let x2 = xE - dist*0.9
-        let y2 = yE
-
-        // Draw the line
-        context.beginPath()
-        context.moveTo(xS, yS)
-        context.bezierCurveTo(x1, y1, x2, y2, xE, yE)
-        context.stroke()
+        drawSingleLatitudeArc(context, xS, yS, xE, yE)
     })//forEach
-}// function drawLatitudeLine
+}// function drawLatitudeArcs
+
+function drawSingleLatitudeArc(context, xS, yS, xE, yE) {
+    // Control points
+    let dist = (xE - xS) / 2
+    let x1 = xS + dist*0.9
+    let y1 = yS
+    let x2 = xE - dist*0.9
+    let y2 = yE
+
+    // Draw the line
+    context.beginPath()
+    context.moveTo(xS, yS)
+    context.bezierCurveTo(x1, y1, x2, y2, xE, yE)
+    context.stroke()
+}// function drawSingleLatitudeArc
+
+/////////////////////////////////////////////////////////////////////
+////////////////////////// Hover Functions //////////////////////////
+/////////////////////////////////////////////////////////////////////
+// Setup the hover on the top canvas, get the mouse position and call the drawing functions
+function setupHover() {
+    d3.select("#canvas-hover").on("mousemove", function(event) {
+        // Get the position of the mouse on the canvas
+        let [mx, my] = d3.pointer(event, this);
+        let [d, FOUND] = findNode(mx, my);
+
+        // Draw the hover state on the top canvas
+        if(FOUND && ((d.preciptype === "snow" && d.tempmin < 1.5) || (d.preciptype === "rain,snow" && d.tempmin < 1.5)) && !(d.precip > scale_precip.domain()[1])) {
+            HOVER_ACTIVE = true
+            HOVERED_NODE = d
+
+            // Fade out the main canvas, using CSS
+            canvas.style.opacity = '0.2'
+
+            // console.log(d.description)
+
+            // Draw the hovered node and its neighbors and links
+            drawHoverState(context_hover, d)
+        } else {
+            context_hover.clearRect(0, 0, WIDTH, HEIGHT)
+            HOVER_ACTIVE = false
+            HOVERED_NODE = null
+    
+            // Fade the main canvas back in
+            canvas.style.opacity = '1'
+        }// else
+
+    })// on mousemove
+}// function setupHover
+
+// Turn the mouse position into a canvas x and y location and see if it's close enough to a node
+function findNode(mx, my) {
+    mx = mx / PAGE_SF
+    my = my / PAGE_SF
+
+    //Get the closest hovered node
+    let point = delaunay.find(mx, my)
+    let d = data[point]
+
+    // Get the distance from the mouse to the node
+    let dist = sqrt((d.x_canvas - mx)**2 + (d.y_canvas - my)**2)
+    // If the distance is too big, don't show anything
+    let FOUND = dist < 50
+
+    return [d, FOUND]
+}// function findNode
+
+// Draw the hovered snowflake
+function drawHoverState(context, d) {
+    // Draw the hover canvas
+    context.save()
+    context.clearRect(0, 0, WIDTH, HEIGHT)
+
+    // Show the city & country name
+    context.textAlign = "right"
+    context.textBaseline = "middle"
+    context.fillStyle = COLOR_TEXT
+    context.font = `${22*SF}px ${FONT_FAMILY}`
+    let city_x = MARGIN.left - 30 * SF
+    if(d.x_canvas > WIDTH/2) city_x += WIDTH/2
+    context.fillText(d.city, city_x, d.y_canvas)
+    context.fillStyle = COLOR_SUB_TEXT
+    context.font = `italic ${18*SF}px ${FONT_FAMILY}`
+    context.fillText(`${d.country}`, city_x, d.y_canvas + 20 * SF)
+
+    // Draw a ring around the hovered snowflake
+    let r_ring = drawHoverRing(context, d.x_canvas, d.y_canvas, d.r)
+
+    // Draw a line from the hovered ring to the city label
+    context.strokeStyle = "#5ccafa"
+    context.lineWidth = 3 * SF
+    context.beginPath()
+    context.moveTo(d.x_canvas - r_ring - 10 * SF, d.y_canvas)
+    context.lineTo(city_x + 10 * SF, d.y_canvas)
+    context.stroke()
+    // Draw a line from the hovered ring to the year label
+    context.beginPath()
+    context.moveTo(d.x_canvas, d.y_canvas + r_ring + 10 * SF)
+    context.lineTo(d.x_canvas, MARGIN.top + h + 30 * SF)
+    context.stroke()
+
+    // Draw the snowflake on the hover canvas
+    context.globalCompositeOperation = "multiply"
+    drawSingleFlake(context, d, d.x_canvas, d.y_canvas, true)
+    context.globalCompositeOperation = "source-over"
+
+    // Also show the city and country above the hovered ring
+    context.textAlign = "center"
+    context.textBaseline = "middle"
+    // City
+    context.fillStyle = COLOR_TEXT
+    context.font = `${28*SF}px ${FONT_FAMILY}`
+    context.fillText(d.city, d.x_canvas, d.y_canvas - d.r - 120)
+    // Country
+    context.fillStyle = COLOR_SUB_TEXT
+    context.font = `italic ${22*SF}px ${FONT_FAMILY}`
+    context.fillText(`${d.country}`, d.x_canvas, d.y_canvas - d.r - 81)
+    // Year
+    context.fillStyle = COLOR_TEXT
+    context.font = `normal ${23*SF}px ${FONT_FAMILY_NUMBERS}`
+    context.fillText(`${d.year}`, d.x_canvas, d.y_canvas - d.r - 35)
+
+    // Draw the latitude arc
+    // Start
+    let xS = MARGIN.left + w + 20 * SF
+    if(d.x_canvas > WIDTH/2) xS += WIDTH/2
+    let yS = d.y_canvas
+    // End
+    let xE = MARGIN.left + line_x - 20 * SF
+    if(d.x_canvas > WIDTH/2) xE += WIDTH/2
+    let yE = MARGIN.top + scale_latitude(d.latitude)
+    context.lineWidth = 3 * SF
+    context.strokeStyle = "#5ccafa"
+    drawSingleLatitudeArc(context, xS, yS, xE, yE)
+
+    context.restore()
+} // function drawHoverState
+
+//////////////////////// Draw Hover Ring ////////////////////////
+// Draw a stroked ring around the hovered snowflake
+function drawHoverRing(context, x, y, r) {
+    r += 10
+    context.beginPath()
+    context.moveTo(x + r, y)
+    context.arc(x, y, r, 0, TAU)
+    context.strokeStyle = "#5ccafa"
+    context.lineWidth = 5 * SF
+    context.stroke()
+
+    return r
+}// function drawHoverRing
 
 /////////////////////////////////////////////////////////////////////
 ////////////////////////// Helper Functions /////////////////////////
@@ -1132,7 +1319,7 @@ async function savePNG() {
     let date_time = `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())} at ${pad(time.getHours())}.${pad(time.getMinutes())}.${pad(time.getSeconds())}`
 
     let download_link = document.createElement("a")
-    canvas2D.toBlob(function(blob) {
+    canvas.toBlob(function(blob) {
         let url = URL.createObjectURL(blob)
         download_link.href = url
         download_link.download = `Snow - ${date_time}.png`
