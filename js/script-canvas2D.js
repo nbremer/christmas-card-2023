@@ -96,6 +96,8 @@ function setSize(canvas) {
 window.addEventListener("resize", () => {
     const screen_width = Math.round(Math.min(window.innerWidth - 2 * 40, WIDTH / 2))
     PAGE_SF = screen_width / WIDTH
+    canvas_background.style.width = `${screen_width}px`
+    canvas_background.style.height = `${screen_width / ASP}px`
     canvas.style.width = `${screen_width}px`
     canvas.style.height = `${screen_width / ASP}px`
     canvas_hover.style.width = `${screen_width}px`
